@@ -1,0 +1,4 @@
+CREATE TABLE todos (
+    id int IDENTITY(1,1) PRIMARY KEY ,
+    task NVARCHAR(1000) NOT NULL
+)
