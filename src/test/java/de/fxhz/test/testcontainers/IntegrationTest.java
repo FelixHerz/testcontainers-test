@@ -1,6 +1,7 @@
 package de.fxhz.test.testcontainers;
 
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -13,6 +14,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.sql.*;
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,6 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class IntegrationTest {
 
 
+    public static final String TEST_TASK = "Test todo";
+    public static final String TASK_PROPERTY = "task";
+    public static final String ID_PROPERTY = "id";
     @Container
     static MSSQLServerContainer<?> mssqlserver = new MSSQLServerContainer<>("mcr.microsoft.com/mssql/server:2019-latest")
             .acceptLicense()
@@ -41,13 +46,13 @@ class IntegrationTest {
 
     @DynamicPropertySource
     static void neo4jProperties(DynamicPropertyRegistry registry) {
-        jdbcUrl = mssqlserver.getJdbcUrl();
+        jdbcUrl = mssqlserver.getJdbcUrl() + ";trustServerCertificate=true;queryTimeout=5;loginTimeout=5";
         username = mssqlserver.getUsername();
         password = mssqlserver.getPassword();
 
         log.info(jdbcUrl);
 
-        registry.add("spring.datasource.url", () -> jdbcUrl + ";trustServerCertificate=true");
+        registry.add("spring.datasource.url", () -> jdbcUrl);
         registry.add("spring.datasource.username", () -> username);
         registry.add("spring.datasource.password", () -> password);
         registry.add("spring.datasource.migrate", () -> "true");
@@ -58,29 +63,53 @@ class IntegrationTest {
 
     private TodoRestApi restApi;
 
-    @Test
-    void name() {
+    @BeforeEach
+    void setUp() {
         restApi = new TodoRestApi(todoRepository);
-        restApi.addToList("Test todo");
-        var todos = restApi.getList();
-        assertTrue(todos.contains("Test todo"));
+    }
 
+    @Test
+    void testAddAndListWithSqlServer() {
+
+        // Test
+        restApi.addToList(TEST_TASK);
+        var todos = restApi.getList();
+
+        // Verify
+        assertTrue(todos.contains(TEST_TASK));
+        verifyValuesInDatabaseWithoutSpringTechnologies();
+    }
+
+    private static void verifyValuesInDatabaseWithoutSpringTechnologies() {
         String query = "SELECT id, task FROM todos";
 
-        // Try-with-resources to ensure resources are closed properly
-        try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password);
-             Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery(query)) {
+        var tasksInDatabase = new ArrayList<String>();
 
-            // Process the result set
-            while (resultSet.next()) {
-                int id = resultSet.getInt("id");
-                String task = resultSet.getString("task");
-                System.out.println("ID: " + id + ", Task: " + task);
-            }
+        try (var connection = DriverManager.getConnection(jdbcUrl, username, password);
+             var statement = connection.createStatement();
+             var resultSet = statement.executeQuery(query)) {
+
+            tasksInDatabase = extractTasksInDatabaseFromResult(resultSet);
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logDatabaseAccessFailed(e);
         }
+        assertTrue(tasksInDatabase.contains(TEST_TASK));
+    }
+
+    private static ArrayList<String> extractTasksInDatabaseFromResult(ResultSet resultSet) throws SQLException {
+        var tasksInDatabase = new ArrayList<String>();
+        log.info("%s\t%s".formatted(ID_PROPERTY, TASK_PROPERTY));
+        while (resultSet.next()) {
+            var id = resultSet.getInt(ID_PROPERTY);
+            var task = resultSet.getString(TASK_PROPERTY);
+            log.info("%d\t%s".formatted(id, task));
+            tasksInDatabase.add(task);
+        }
+        return tasksInDatabase;
+    }
+
+    private static void logDatabaseAccessFailed(SQLException e) {
+        log.error("Accessing the database with JDBC failed: %s - %s".formatted(e.getClass().getSimpleName(), e.getMessage()), e);
     }
 }
