@@ -11,9 +11,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Test with a test container and JdbcTest works fine.
+ */
 @Testcontainers
 @JdbcTest
-class JunitJupiterTest {
+class JdbcIntegrationTest {
 
     @Container
     @ServiceConnection

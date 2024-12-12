@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MSSQLServerContainer;
@@ -13,22 +14,21 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.sql.*;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * This shall demonstrate the usage of testcontainers in combination with mssql.
- * Currently, there is a problem, I am unable to resolve.
- * <p>
- * Establishing a database connection using jdbc is resulting in a hang of the test.
+ * This shall demonstrate the usage of testcontainers in combination with spring boot test.
+ * That actually works, but it sets up the whole app, which is not always, what I want.
  */
 @Slf4j
 @Testcontainers
-@DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-class IntegrationTest {
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+class SpringBootIntegrationTest {
 
 
     public static final String TEST_TASK = "Test todo";
@@ -58,15 +58,10 @@ class IntegrationTest {
         registry.add("spring.datasource.migrate", () -> "true");
     }
 
-    @Autowired
-    private TodoRepository todoRepository;
 
+    @Autowired
     private TodoRestApi restApi;
 
-    @BeforeEach
-    void setUp() {
-        restApi = new TodoRestApi(todoRepository);
-    }
 
     @Test
     void testAddAndListWithSqlServer() {
